@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">uTalk</string>
+    <string name="select_device">Select a device</string>
+    <string name="send_text">Send text</string>
 </resources>
