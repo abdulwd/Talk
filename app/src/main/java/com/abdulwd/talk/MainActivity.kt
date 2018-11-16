@@ -1,14 +1,20 @@
 package com.abdulwd.talk
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
 import android.widget.Toast
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import kotlinx.android.synthetic.main.activity_main.*
-import java.io.IOException
+import net.gotev.speech.Speech
+import net.gotev.speech.SpeechDelegate
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.*
@@ -17,25 +23,48 @@ class MainActivity : Activity() {
 
     private var outputStream: OutputStream? = null
     private var inStream: InputStream? = null
-    private val requestBluetoothEnable: Int = 1
+    private val requestBluetoothEnable = 1
+    private val requestAudioPermission = 2
     private val defaultUUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
+    private val speechDelegate: SpeechDelegate = object : SpeechDelegate {
+        override fun onStartOfSpeech() {
+
+        }
+
+        override fun onSpeechPartialResults(results: MutableList<String>?) {
+
+        }
+
+        override fun onSpeechRmsChanged(value: Float) {
+
+        }
+
+        override fun onSpeechResult(result: String?) {
+            inputEdiText.setText(result)
+            sendText.callOnClick()
+            Handler().post { startVoiceRecognition() }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        init()
-        sendText.setOnClickListener {
-            val inputText = inputEdiText.editableText
-            if (inputText.isNotEmpty()) {
-                write(inputText.toString())
-                inputEdiText.setText("")
-                val output = if (outputTextView.text != null)
-                    outputTextView.text.toString() + inputText.toString() + "\n"
-                else
-                    inputText.toString() + "\n"
-                outputTextView.text = output
-            }
+        connectBluetoothDevice()
+        Speech.init(this, packageName)
+        sendText.setOnClickListener { sendText() }
+    }
+
+    fun sendText() {
+        val inputText = inputEdiText.editableText
+        if (inputText.isNotEmpty()) {
+            write(inputText.toString())
+            inputEdiText.setText("")
+            val output = if (outputTextView.text != null)
+                outputTextView.text.toString() + inputText.toString() + "\n"
+            else
+                inputText.toString() + "\n"
+            outputTextView.text = output
         }
     }
 
@@ -47,8 +76,19 @@ class MainActivity : Activity() {
         }
     }
 
-    @Throws(IOException::class)
-    private fun init() {
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            startVoiceRecognition()
+        } else {
+            Toast.makeText(this, "Audio permissions are required", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun connectBluetoothDevice() {
         val blueAdapter = BluetoothAdapter.getDefaultAdapter()
         if (blueAdapter.isEnabled) {
             showDialog(blueAdapter.bondedDevices.toTypedArray())
@@ -69,8 +109,23 @@ class MainActivity : Activity() {
             outputStream = socket.outputStream
             inStream = socket.inputStream
             Toast.makeText(applicationContext, "Connected", Toast.LENGTH_SHORT).show()
-        } catch (e: java.lang.Exception) {
+            checkAudioPermission()
+        } catch (e: java.io.IOException) {
             Toast.makeText(this, "Unable to connect", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun checkAudioPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                requestAudioPermission
+            )
+        } else {
+            startVoiceRecognition()
         }
     }
 
@@ -85,5 +140,14 @@ class MainActivity : Activity() {
                 }
             builder.create()
         }.show()
+    }
+
+    private fun startVoiceRecognition() {
+        Speech.getInstance().startListening(speechProgressView, speechDelegate)
+    }
+
+    override fun onDestroy() {
+        Speech.getInstance().stopTextToSpeech()
+        super.onDestroy()
     }
 }
