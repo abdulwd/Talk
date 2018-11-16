@@ -4,46 +4,25 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothSocket
-import android.content.BroadcastReceiver
-import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import kotlinx.android.synthetic.main.activity_main.*
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.*
 
 class MainActivity : Activity() {
 
     private var outputStream: OutputStream? = null
     private var inStream: InputStream? = null
     private val requestBluetoothEnable: Int = 1
-    var device: BluetoothDevice? = null
-    private val uuidReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            try {
-                /*device?.createRfcommSocketToServiceRecord(device?.uuids?.get(0)?.uuid)
-                ?.let { connectSocket(it) }*/
-                val uuid = intent?.getParcelableArrayExtra(BluetoothDevice.EXTRA_UUID)
-                uuid?.forEach { Log.d("UUID bluetooth", it.toString()) }
-                Toast.makeText(applicationContext, "Unable to connect", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-
-            }
-        }
-    }
+    private val defaultUUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
-        val intentFilter = IntentFilter()
-        intentFilter.addAction(BluetoothDevice.ACTION_UUID)
-        registerReceiver(uuidReceiver, intentFilter)
 
         init()
         sendText.setOnClickListener {
@@ -60,51 +39,51 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (resultCode == Activity.RESULT_OK) {
+            showDialog(BluetoothAdapter.getDefaultAdapter().bondedDevices.toTypedArray())
+        } else {
+            Toast.makeText(this, "Turn on bluetooth to use this app", Toast.LENGTH_LONG).show()
+        }
+    }
+
     @Throws(IOException::class)
     private fun init() {
         val blueAdapter = BluetoothAdapter.getDefaultAdapter()
-        if (blueAdapter != null) {
-            if (blueAdapter.isEnabled) {
-                showDialog(blueAdapter.bondedDevices.toList())
-            } else {
-                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-                startActivityForResult(enableBtIntent, requestBluetoothEnable)
-                showDialog(blueAdapter.bondedDevices.toList())
-            }
+        if (blueAdapter.isEnabled) {
+            showDialog(blueAdapter.bondedDevices.toTypedArray())
+        } else {
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            startActivityForResult(enableBtIntent, requestBluetoothEnable)
         }
     }
 
-    @Throws(IOException::class)
-    fun write(s: String) {
-        outputStream!!.write(s.toByteArray())
+    private fun write(s: String) {
+        outputStream?.write(s.toByteArray())
     }
 
-    private fun connect() {
+    private fun connect(device: BluetoothDevice) {
         try {
-            device?.createRfcommSocketToServiceRecord(device?.uuids?.get(0)?.uuid)
-                ?.let { connectSocket(it) }
+            val socket = device.createRfcommSocketToServiceRecord(defaultUUID)
+            socket.connect()
+            outputStream = socket.outputStream
+            inStream = socket.inputStream
+            Toast.makeText(applicationContext, "Connected", Toast.LENGTH_SHORT).show()
         } catch (e: java.lang.Exception) {
-            device?.fetchUuidsWithSdp()
+            Toast.makeText(this, "Unable to connect", Toast.LENGTH_LONG).show()
         }
     }
 
-    private fun showDialog(devices: List<BluetoothDevice>) {
+    private fun showDialog(devices: Array<BluetoothDevice>) {
         this.let {
             val builder = AlertDialog.Builder(it)
             builder.setTitle(R.string.select_device)
                 .setItems(devices.map { device -> device.name }
-                    .toTypedArray()) { _, which ->
-                    device = devices[which]
-                    connect()
+                    .toTypedArray()) { d, which ->
+                    d.dismiss()
+                    connect(devices[which])
                 }
             builder.create()
         }.show()
-    }
-
-    private fun connectSocket(socket: BluetoothSocket) {
-        socket.connect()
-        outputStream = socket.outputStream
-        inStream = socket.inputStream
-        Toast.makeText(applicationContext, "Connected", Toast.LENGTH_SHORT).show()
     }
 }
