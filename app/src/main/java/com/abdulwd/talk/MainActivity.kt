@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
+import android.preference.PreferenceManager
+import android.util.Log
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -25,7 +27,48 @@ class MainActivity : Activity() {
     private var inStream: InputStream? = null
     private val requestBluetoothEnable = 1
     private val requestAudioPermission = 2
+    private val words = LinkedList<String>()
+    private val displayText = StringBuilder()
+    private val displayMaxHeight = 2
+    private val displayMaxWidth = 10
+    private val displaySize = displayMaxHeight * displayMaxWidth
     private val defaultUUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
+    private val handler = Handler()
+    private var handlerCompleted = true
+    private val runnable: Runnable = object : Runnable {
+        override fun run() {
+            runOnUiThread {
+                Log.d("Abdul", "run")
+                if (words.isEmpty()) {
+                    inputEdiText.setText("")
+                    sendText()
+                    return@runOnUiThread
+                }
+                if (words.peek().length + displayText.length > displaySize) {
+                    displayText.setLength(0)
+                }
+
+                while (words.peek() != null &&
+                    displayText.length + words.peek().length <= displaySize
+                ) {
+                    displayText.append(words.poll())
+                    displayText.append(' ')
+                }
+                inputEdiText.setText(displayText)
+                sendText.callOnClick()
+            }
+            if (words.isNotEmpty()) {
+                handler.postDelayed(
+                    this, 1000L *
+                            PreferenceManager
+                                .getDefaultSharedPreferences(this@MainActivity)
+                                .getInt("delay", 5)
+                )
+            } else {
+                handlerCompleted = true
+            }
+        }
+    }
     private val speechDelegate: SpeechDelegate = object : SpeechDelegate {
         override fun onStartOfSpeech() {
 
@@ -40,8 +83,11 @@ class MainActivity : Activity() {
         }
 
         override fun onSpeechResult(result: String?) {
-            inputEdiText.setText(result)
-            sendText.callOnClick()
+            result?.let { it.split(" ").forEach { word -> words.add(word) } }
+            if (handlerCompleted) {
+                handlerCompleted = false
+                handler.post(runnable)
+            }
             Handler().post { startVoiceRecognition() }
         }
     }
@@ -53,12 +99,13 @@ class MainActivity : Activity() {
         connectBluetoothDevice()
         Speech.init(this, packageName)
         sendText.setOnClickListener { sendText() }
+        speechProgressView.setOnClickListener { startVoiceRecognition() }
     }
 
     fun sendText() {
         val inputText = inputEdiText.editableText
+        write(inputText.toString())
         if (inputText.isNotEmpty()) {
-            write(inputText.toString())
             inputEdiText.setText("")
             val output = if (outputTextView.text != null)
                 outputTextView.text.toString() + inputText.toString() + "\n"
@@ -147,6 +194,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(runnable)
         Speech.getInstance().stopTextToSpeech()
         super.onDestroy()
     }
