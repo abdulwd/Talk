@@ -51,7 +51,7 @@
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
         android:orientation="vertical"
-        app:layout_constraintBottom_toTopOf="@id/inputEdiText"
+        app:layout_constraintBottom_toTopOf="@id/startButton"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
@@ -60,4 +60,17 @@
             android:layout_width="120dp"
             android:layout_height="150dp" />
     </LinearLayout>
+
+
+    <Button
+        android:id="@+id/startButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:backgroundTint="#2962FF"
+        android:padding="16dp"
+        android:text="@string/start_listening"
+        android:textColor="@android:color/white"
+        app:layout_constraintBottom_toTopOf="@id/inputEdiText"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>
